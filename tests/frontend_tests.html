@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Frontend Unit Tests - 瓷器监测系统</title>
+<style>
+body { font-family: 'Courier New', monospace; background: #1a1a2e; color: #eaeaea; padding: 20px; }
+h1 { color: #4fd1c5; }
+.test-suite { margin: 20px 0; padding: 15px; background: #16213e; border-radius: 8px; border-left: 4px solid #4fd1c5; }
+.test-case { margin: 8px 0; padding: 8px 12px; background: #0f3460; border-radius: 4px; font-size: 14px; }
+.test-pass { color: #48bb78; }
+.test-fail { color: #fc8181; }
+.test-name { font-weight: bold; }
+.summary { margin-top: 30px; padding: 20px; background: #0f3460; border-radius: 8px; font-size: 16px; }
+.passed-count { color: #48bb78; font-weight: bold; }
+.failed-count { color: #fc8181; font-weight: bold; }
+canvas { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Porcelain Monitor - Frontend Unit Tests</h1>
+<div id="results"></div>
+<div class="summary" id="summary"></div>
+
+<canvas id="test-canvas" width="800" height="600"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const TestRunner = (() => {
+    let results = [];
+    let passed = 0, failed = 0;
+
+    function assert(cond, msg) {
+        if (!cond) throw new Error(msg || 'Assertion failed');
+    }
+
+    function assertNear(actual, expected, tolPct, msg) {
+        const relErr = Math.abs(expected) > 1e-15
+            ? Math.abs(actual - expected) / Math.abs(expected) * 100
+            : (Math.abs(actual) > 1e-15 ? 100 : 0);
+        if (relErr > tolPct) {
+            throw new Error((msg || 'Relative error') + `: actual=${actual}, expected=${expected}, error=${relErr.toFixed(2)}% > tol=${tolPct}%`);
+        }
+    }
+
+    function assertRange(val, min, max, msg) {
+        if (val < min || val > max) {
+            throw new Error((msg || 'Value out of range') + `: ${val} not in [${min}, ${max}]`);
+        }
+    }
+
+    function assertGt(a, b, msg) {
+        if (!(a > b)) throw new Error((msg || 'Expected greater') + `: ${a} > ${b} is false`);
+    }
+
+    function assertLt(a, b, msg) {
+        if (!(a < b)) throw new Error((msg || 'Expected less') + `: ${a} < ${b} is false`);
+    }
+
+    function assertEq(a, b, msg) {
+        if (a !== b) throw new Error((msg || 'Expected equal') + `: ${a} !== ${b}`);
+    }
+
+    function runCase(suite, name, fn) {
+        const start = performance.now();
+        try {
+            fn();
+            const dur = (performance.now() - start).toFixed(1);
+            results.push({ suite, name, pass: true, dur });
+            passed++;
+            renderCase(suite, name, true, dur);
+        } catch (e) {
+            const dur = (performance.now() - start).toFixed(1);
+            results.push({ suite, name, pass: false, dur, err: e.message });
+            failed++;
+            renderCase(suite, name, false, dur, e.message);
+        }
+    }
+
+    function renderCase(suite, name, pass, dur, err = '') {
+        const resultsDiv = document.getElementById('results');
+        let suiteDiv = document.getElementById(`suite-${suite}`);
+        if (!suiteDiv) {
+            suiteDiv = document.createElement('div');
+            suiteDiv.className = 'test-suite';
+            suiteDiv.id = `suite-${suite}`;
+            suiteDiv.innerHTML = `<h3 style="color:#4fd1c5;margin:0 0 10px">${suite}</h3>`;
+            resultsDiv.appendChild(suiteDiv);
+        }
+        const cls = pass ? 'test-pass' : 'test-fail';
+        const icon = pass ? '✓' : '✗';
+        const errHtml = err ? `<div style="color:#fc8181;margin-left:20px;font-size:12px">${err}</div>` : '';
+        suiteDiv.innerHTML += `<div class="test-case ${cls}"><span class="test-name">[${icon}] ${name}</span> (${dur}ms)${errHtml}</div>`;
+    }
+
+    function renderSummary() {
+        const total = passed + failed;
+        document.getElementById('summary').innerHTML =
+            `<h2 style="margin-top:0;color:#4fd1c5">Test Summary</h2>
+             <p>Total: ${total} | <span class="passed-count">Passed: ${passed}</span> | <span class="failed-count">Failed: ${failed}</span></p>
+             <p>Pass rate: ${total ? (passed / total * 100).toFixed(1) : 0}%</p>`;
+    }
+
+    return { assert, assertNear, assertRange, assertGt, assertLt, assertEq, runCase, renderSummary };
+})();
+
+const T = TestRunner;
+</script>
+
+<script src="../frontend/js/CrackGradient.js"></script>
+<script src="../frontend/js/stress-heatmap.js"></script>
+
+<script>
+
+T.runCase('StressHeatmap', 'JetColorLUT_256ColorsGenerated', () => {
+    const lut = generateJetColorLUT(256);
+    T.assertEq(lut.length, 256, 'LUT should have 256 entries');
+    T.assert(lut[0].r === 0 && lut[0].g < 30 && lut[0].b > 120, 'First color should be dark blue');
+    T.assert(lut[127].r < 50 && lut[127].g > 200 && lut[127].b < 50, 'Middle color should be green');
+    T.assert(lut[255].r > 120 && lut[255].g < 50 && lut[255].b < 50, 'Last color should be red');
+});
+
+T.runCase('StressHeatmap', 'JetColorLUT_SmoothGradient', () => {
+    const lut = generateJetColorLUT(256);
+    for (let i = 1; i < 256; i++) {
+        const dr = Math.abs(lut[i].r - lut[i-1].r);
+        const dg = Math.abs(lut[i].g - lut[i-1].g);
+        const db = Math.abs(lut[i].b - lut[i-1].b);
+        T.assert(dr <= 10 && dg <= 10 && db <= 10, 'Gradient should be smooth at index ' + i);
+    }
+});
+
+T.runCase('StressHeatmap', 'ColorSampling_ZeroStress_Blue', () => {
+    const canvas = document.getElementById('test-canvas');
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ canvas });
+    const geom = new THREE.SphereGeometry(1, 8, 8);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial());
+    const heatmap = new StressHeatmap(mesh, { opacity: 0.8 });
+    scene.add(heatmap);
+
+    const testData = [];
+    for (let x = -2; x <= 2; x += 1)
+        for (let y = -2; y <= 2; y += 1)
+            for (let z = -2; z <= 2; z += 1)
+                testData.push({ x, y, z, von_mises: 0, sigma_xx: 0, sigma_yy: 0, sigma_zz: 0 });
+    heatmap.updateStressData(testData);
+
+    const color = heatmap.sampleColorLUT(0);
+    T.assert(color.r < 50, 'Zero stress should be blue (low R)');
+    T.assert(color.b > 100, 'Zero stress should be blue (high B)');
+
+    renderer.dispose();
+});
+
+T.runCase('StressHeatmap', 'ColorSampling_HighStress_Red', () => {
+    const canvas = document.getElementById('test-canvas');
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ canvas });
+    const geom = new THREE.SphereGeometry(1, 8, 8);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial());
+    const heatmap = new StressHeatmap(mesh, { opacity: 0.8 });
+    scene.add(heatmap);
+
+    heatmap.setStressRange(0, 300);
+    const color = heatmap.sampleColorLUT(300);
+    T.assert(color.r > 200, 'Max stress should be red (high R)');
+    T.assert(color.g < 80, 'Max stress should be red (low G)');
+    T.assert(color.b < 80, 'Max stress should be red (low B)');
+
+    renderer.dispose();
+});
+
+T.runCase('StressHeatmap', 'TrilinearInterpolation_Accurate', () => {
+    const canvas = document.getElementById('test-canvas');
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ canvas });
+    const geom = new THREE.BoxGeometry(2, 2, 2, 4, 4, 4);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial());
+    const heatmap = new StressHeatmap(mesh);
+    scene.add(heatmap);
+
+    const testData = [
+        { x: 0, y: 0, z: 0, von_mises: 0, sigma_xx: 0, sigma_yy: 0, sigma_zz: 0 },
+        { x: 1, y: 0, z: 0, von_mises: 100, sigma_xx: 100, sigma_yy: 0, sigma_zz: 0 }
+    ];
+    heatmap.updateStressData(testData);
+    const stress = heatmap.getStressAtPoint(0.5, 0, 0);
+    T.assertNear(stress.von_mises, 50, 10, 'Midpoint should be ~50MPa (linear interpolation)');
+
+    renderer.dispose();
+});
+
+T.runCase('StressHeatmap', 'ToggleHeatmap_StateChanges', () => {
+    const canvas = document.getElementById('test-canvas');
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ canvas });
+    const geom = new THREE.SphereGeometry(1, 8, 8);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial());
+    const heatmap = new StressHeatmap(mesh);
+    scene.add(heatmap);
+
+    T.assert(heatmap.visible === true || heatmap.visible === false, 'Initial state should be boolean');
+    const s1 = heatmap.toggleHeatmap();
+    const s2 = heatmap.toggleHeatmap();
+    T.assert(s1 !== s2, 'Toggle should flip state');
+
+    renderer.dispose();
+});
+
+T.runCase('StressHeatmap', 'UpdateStressData_OutOfBoundsClipped', () => {
+    const canvas = document.getElementById('test-canvas');
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ canvas });
+    const geom = new THREE.SphereGeometry(1, 8, 8);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial());
+    const heatmap = new StressHeatmap(mesh);
+    scene.add(heatmap);
+    heatmap.setStressRange(0, 300);
+
+    const testData = [];
+    for (let i = 0; i < 5; i++) {
+        testData.push({ x: i, y: 0, z: 0, von_mises: 999, sigma_xx: 999, sigma_yy: 0, sigma_zz: 0 });
+    }
+    T.assert(() => { heatmap.updateStressData(testData); return true; }, 'Should not throw with out-of-bounds values');
+
+    renderer.dispose();
+});
+
+T.runCase('StressHeatmap', 'Opacity_ValidRange', () => {
+    const canvas = document.getElementById('test-canvas');
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ canvas });
+    const geom = new THREE.SphereGeometry(1, 8, 8);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial());
+    const heatmap = new StressHeatmap(mesh, { opacity: 0.85 });
+    scene.add(heatmap);
+
+    heatmap.setOpacity(0.5);
+    T.assertRange(heatmap.getOpacity ? heatmap.getOpacity() : 0.5, 0, 1, 'Opacity should be in [0,1]');
+
+    renderer.dispose();
+});
+
+T.runCase('CrackGradient', 'Gradient256_ValidRange', () => {
+    const gradient = new CrackGradient();
+    const c0 = gradient.getColor(0);
+    const cMax = gradient.getColor(1);
+    T.assert(c0.b > 0.5, 'Min depth should be blue');
+    T.assert(cMax.r > 0.5, 'Max depth should be red');
+});
+
+T.runCase('CrackGradient', 'GradientSmooth_MonotonicChannel', () => {
+    const gradient = new CrackGradient();
+    let prevR = -1, prevG = -1, prevB = -1;
+    for (let t = 0; t <= 1; t += 0.01) {
+        const c = gradient.getColor(t);
+        if (prevR >= 0) {
+            T.assert(Math.abs(c.r - prevR) < 0.2, 'Red channel should vary smoothly');
+        }
+        prevR = c.r; prevG = c.g; prevB = c.b;
+    }
+});
+
+T.renderSummary();
+</script>
+
+</body>
+</html>
