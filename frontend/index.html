@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古代瓷器釉面裂纹监测与纳米修复材料评估系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <header class="main-header">
+        <div class="header-content">
+            <h1>🏺 古代瓷器釉面裂纹监测系统</h1>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-label">馆藏瓷器</span>
+                    <span class="stat-value" id="total-porcelains">200</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">在线传感器</span>
+                    <span class="stat-value" id="online-sensors">60</span>
+                </div>
+                <div class="stat-item alert-stat">
+                    <span class="stat-label">活跃告警</span>
+                    <span class="stat-value" id="active-alerts">0</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3>瓷器列表</h3>
+                <div class="filter-bar">
+                    <select id="dynasty-filter">
+                        <option value="all">全部朝代</option>
+                        <option value="SONG">宋代</option>
+                        <option value="YUAN">元代</option>
+                    </select>
+                    <input type="text" id="search-input" placeholder="搜索瓷器名称或编号...">
+                </div>
+                <div class="porcelain-list" id="porcelain-list">
+                </div>
+            </div>
+        </aside>
+
+        <main class="content">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="viewer">三维视图</button>
+                <button class="tab-btn" data-tab="cracks">裂纹监测</button>
+                <button class="tab-btn" data-tab="prediction">扩展预测</button>
+                <button class="tab-btn" data-tab="repair">修复模拟</button>
+                <button class="tab-btn" data-tab="alerts">告警中心</button>
+                <button class="tab-btn" data-tab="stress">应力热力图</button>
+                <button class="tab-btn" data-tab="penetration">渗透预测</button>
+                <button class="tab-btn" data-tab="bending">强度评估</button>
+                <button class="tab-btn" data-tab="virtual-repair">虚拟修复</button>
+            </div>
+
+            <div class="tab-content">
+                <div id="viewer-tab" class="tab-pane active">
+                    <div class="viewer-container">
+                        <div id="three-container"></div>
+                        <div class="viewer-controls">
+                            <div class="control-group">
+                                <label>显示模式:</label>
+                                <select id="display-mode">
+                                    <option value="solid">实体</option>
+                                    <option value="wireframe">线框</option>
+                                    <option value="transparent">透明</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>裂纹显示:</label>
+                                <input type="checkbox" id="show-cracks" checked>
+                                <span>显示裂纹</span>
+                            </div>
+                            <div class="control-group">
+                                <label>自动旋转:</label>
+                                <input type="checkbox" id="auto-rotate">
+                            </div>
+                        </div>
+                        <div class="depth-legend">
+                            <div class="legend-title">裂纹深度 (μm)</div>
+                            <div class="legend-bar">
+                                <div class="legend-gradient"></div>
+                                <div class="legend-labels">
+                                    <span>0</span>
+                                    <span>50</span>
+                                    <span>100</span>
+                                    <span>150</span>
+                                    <span>200+</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-panel" id="porcelain-info">
+                            <h3 id="porcelain-name">请选择瓷器</h3>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">博物馆编号</span>
+                                    <span class="info-value" id="info-museum-id">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">朝代</span>
+                                    <span class="info-value" id="info-dynasty">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">年代</span>
+                                    <span class="info-value" id="info-year">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">产地</span>
+                                    <span class="info-value" id="info-origin">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cracks-tab" class="tab-pane">
+                    <div class="cracks-container">
+                        <div class="section-header">
+                            <h2>裂纹监测数据</h2>
+                            <button class="btn-primary" id="refresh-cracks">刷新数据</button>
+                        </div>
+                        <div class="cracks-grid">
+                            <div class="chart-card">
+                                <h3>裂纹深度趋势</h3>
+                                <canvas id="depth-chart"></canvas>
+                            </div>
+                            <div class="chart-card">
+                                <h3>裂纹宽度趋势</h3>
+                                <canvas id="width-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="cracks-list">
+                            <h3>裂纹列表</h3>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>裂纹编号</th>
+                                        <th>检测时间</th>
+                                        <th>最大深度(μm)</th>
+                                        <th>最大宽度(μm)</th>
+                                        <th>总长度(mm)</th>
+                                        <th>状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cracks-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="prediction-tab" class="tab-pane">
+                    <div class="prediction-container">
+                        <div class="section-header">
+                            <h2>裂纹扩展预测 (Paris公式)</h2>
+                        </div>
+                        <div class="prediction-controls">
+                            <div class="control-group">
+                                <label>选择裂纹:</label>
+                                <select id="prediction-crack-select">
+                                    <option value="">请选择裂纹</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>预测时长(小时):</label>
+                                <input type="number" id="prediction-horizon" value="720" min="24" max="8760">
+                            </div>
+                            <button class="btn-primary" id="run-prediction">运行预测</button>
+                        </div>
+                        <div class="prediction-results" id="prediction-results" style="display:none;">
+                            <div class="result-cards">
+                                <div class="result-card">
+                                    <span class="result-label">预测深度(720h)</span>
+                                    <span class="result-value" id="pred-depth">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">预测宽度(720h)</span>
+                                    <span class="result-value" id="pred-width">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">预测长度(720h)</span>
+                                    <span class="result-value" id="pred-length">-</span>
+                                </div>
+                                <div class="result-card risk-high" id="risk-card">
+                                    <span class="result-label">风险等级</span>
+                                    <span class="result-value" id="pred-risk">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">置信度</span>
+                                    <span class="result-value" id="pred-confidence">-</span>
+                                </div>
+                            </div>
+                            <div class="chart-card large">
+                                <h3>裂纹扩展预测曲线</h3>
+                                <canvas id="prediction-chart"></canvas>
+                            </div>
+                            <div class="chart-card">
+                                <h3>应力强度因子范围</h3>
+                                <canvas id="stress-chart"></canvas>
+                            </div>
+                            <div class="chart-card">
+                                <h3>裂纹扩展速率</h3>
+                                <canvas id="growth-rate-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="repair-tab" class="tab-pane">
+                    <div class="repair-container">
+                        <div class="section-header">
+                            <h2>纳米修复材料填充效果模拟 (DEM)</h2>
+                        </div>
+                        <div class="repair-controls">
+                            <div class="control-group">
+                                <label>选择裂纹:</label>
+                                <select id="repair-crack-select">
+                                    <option value="">请选择裂纹</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>修复材料:</label>
+                                <select id="repair-material-select">
+                                    <option value="1">纳米氧化锆 (ZrO2-50)</option>
+                                    <option value="2">纳米二氧化硅 (SiO2-30)</option>
+                                    <option value="3">ZrO2-SiO2复合材料</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>粒子数量:</label>
+                                <input type="number" id="particle-count" value="1000" min="100" max="10000">
+                            </div>
+                            <div class="control-group">
+                                <label>模拟步数:</label>
+                                <input type="number" id="simulation-steps" value="1000" min="100" max="5000">
+                            </div>
+                            <button class="btn-primary" id="run-simulation">运行模拟</button>
+                        </div>
+                        <div class="repair-results" id="repair-results" style="display:none;">
+                            <div class="result-cards">
+                                <div class="result-card">
+                                    <span class="result-label">填充率</span>
+                                    <span class="result-value" id="sim-filling">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">堆积密度</span>
+                                    <span class="result-value" id="sim-density">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">结合强度</span>
+                                    <span class="result-value" id="sim-bonding">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">表面光滑度</span>
+                                    <span class="result-value" id="sim-smoothness">-</span>
+                                </div>
+                                <div class="result-card durability">
+                                    <span class="result-label">耐久性评分</span>
+                                    <span class="result-value" id="sim-durability">-</span>
+                                </div>
+                                <div class="result-card">
+                                    <span class="result-label">孔隙率</span>
+                                    <span class="result-value" id="sim-porosity">-</span>
+                                </div>
+                            </div>
+                            <div class="canvas-container">
+                                <h3>粒子填充效果 (2D切片)</h3>
+                                <canvas id="particle-canvas" width="800" height="400"></canvas>
+                            </div>
+                            <div class="chart-card">
+                                <h3>系统能量变化</h3>
+                                <canvas id="energy-chart"></canvas>
+                            </div>
+                            <div class="material-comparison">
+                                <h3>材料性能对比</h3>
+                                <canvas id="material-radar-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="alerts-tab" class="tab-pane">
+                    <div class="alerts-container">
+                        <div class="section-header">
+                            <h2>告警中心</h2>
+                            <div class="alert-filter">
+                                <select id="alert-type-filter">
+                                    <option value="all">全部类型</option>
+                                    <option value="CRACK_DEPTH_EXCEEDED">深度超限</option>
+                                    <option value="CRACK_WIDTH_EXCEEDED">宽度超限</option>
+                                    <option value="CRACK_PROPAGATION_RISK">扩展风险</option>
+                                    <option value="VIBRATION_ANOMALY">振动异常</option>
+                                </select>
+                                <button class="btn-primary" id="refresh-alerts">刷新</button>
+                            </div>
+                        </div>
+                        <div class="alerts-list" id="alerts-list">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="stress-tab" class="tab-pane">
+                    <div class="stress-container">
+                        <div class="section-header">
+                            <h2>应力热力图分析</h2>
+                        </div>
+                        <div class="prediction-controls">
+                            <div class="control-group">
+                                <label>应力分量:</label>
+                                <select id="stress-component">
+                                    <option value="von_mises">Von Mises</option>
+                                    <option value="sigma_xx">Sigma XX</option>
+                                    <option value="sigma_yy">Sigma YY</option>
+                                    <option value="sigma_zz">Sigma ZZ</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary" id="run-stress-analysis">运行应力分析</button>
+                            <button class="btn-secondary" id="toggle-heatmap">显示/隐藏热力图</button>
+                        </div>
+                        <div class="result-cards">
+                            <div class="result-card">
+                                <span class="result-label">最大 Von Mises (MPa)</span>
+                                <span class="result-value" id="max-von-mises">-</span>
+                            </div>
+                            <div class="result-card">
+                                <span class="result-label">平均 Von Mises (MPa)</span>
+                                <span class="result-value" id="avg-von-mises">-</span>
+                            </div>
+                            <div class="result-card risk-high">
+                                <span class="result-label">高应力区占比</span>
+                                <span class="result-value" id="high-stress-ratio">-</span>
+                            </div>
+                        </div>
+                        <div class="viewer-container">
+                            <div id="stress-three-container"></div>
+                            <div class="info-panel">
+                                <h3>说明</h3>
+                                <p style="font-size:0.85rem;color:#a0aec0;margin-top:0.5rem;">请切换到"三维视图"标签查看完整的应力热力图渲染效果。</p>
+                            </div>
+                            <div class="depth-legend">
+                                <div class="legend-title">应力 (MPa)</div>
+                                <div class="legend-bar">
+                                    <div class="legend-gradient" style="background: linear-gradient(to right, #000080 0%, #0000ff 17%, #00ffff 33%, #00ff00 50%, #ffff00 67%, #ff0000 83%, #800000 100%);"></div>
+                                    <div class="legend-labels">
+                                        <span>0</span>
+                                        <span>50</span>
+                                        <span>100</span>
+                                        <span>150</span>
+                                        <span>200</span>
+                                        <span>250</span>
+                                        <span>300</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="penetration-tab" class="tab-pane">
+                    <div class="penetration-container">
+                        <div class="section-header">
+                            <h2>纳米材料渗透预测</h2>
+                        </div>
+                        <div class="prediction-controls">
+                            <div class="control-group">
+                                <label>选择裂纹:</label>
+                                <select id="penetration-crack-select">
+                                    <option value="">请选择裂纹</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>修复材料:</label>
+                                <select id="penetration-material-select">
+                                    <option value="1">纳米氧化锆 (ZrO2-50)</option>
+                                    <option value="2">纳米二氧化硅 (SiO2-30)</option>
+                                    <option value="3">ZrO2-SiO2复合材料</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>目标深度(μm):</label>
+                                <input type="number" id="target-depth" value="100" min="10" max="500">
+                            </div>
+                            <button class="btn-primary" id="run-penetration">运行渗透预测</button>
+                        </div>
+                        <div class="result-cards">
+                            <div class="result-card">
+                                <span class="result-label">预测渗透时间(s)</span>
+                                <span class="result-value" id="penetration-time">-</span>
+                            </div>
+                            <div class="result-card">
+                                <span class="result-label">初始渗透速率(μm/s)</span>
+                                <span class="result-value" id="initial-rate">-</span>
+                            </div>
+                            <div class="result-card durability">
+                                <span class="result-label">毛细管压力(MPa)</span>
+                                <span class="result-value" id="capillary-pressure">-</span>
+                            </div>
+                        </div>
+                        <div class="cracks-grid">
+                            <div class="chart-card">
+                                <h3>渗透深度-时间曲线</h3>
+                                <canvas id="depth-time-chart"></canvas>
+                            </div>
+                            <div class="chart-card">
+                                <h3>渗透速率-深度曲线</h3>
+                                <canvas id="rate-depth-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card large">
+                            <h3>三种材料对比</h3>
+                            <canvas id="material-compare-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bending-tab" class="tab-pane">
+                    <div class="bending-container">
+                        <div class="section-header">
+                            <h2>四点弯曲强度评估</h2>
+                        </div>
+                        <div class="prediction-controls">
+                            <div class="control-group">
+                                <label>选择裂纹:</label>
+                                <select id="bending-crack-select">
+                                    <option value="">请选择裂纹</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>修复材料:</label>
+                                <select id="bending-material-select">
+                                    <option value="1">纳米氧化锆 (ZrO2-50)</option>
+                                    <option value="2">纳米二氧化硅 (SiO2-30)</option>
+                                    <option value="3">ZrO2-SiO2复合材料</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary" id="run-bending">运行四点弯曲试验</button>
+                        </div>
+                        <div class="result-cards">
+                            <div class="result-card">
+                                <span class="result-label">原始强度(MPa)</span>
+                                <span class="result-value" id="original-strength">-</span>
+                            </div>
+                            <div class="result-card risk-high">
+                                <span class="result-label">未修复强度(MPa)</span>
+                                <span class="result-value" id="unrepaired-strength">-</span>
+                            </div>
+                            <div class="result-card">
+                                <span class="result-label">修复后强度(MPa)</span>
+                                <span class="result-value" id="repaired-strength">-</span>
+                            </div>
+                            <div class="result-card durability">
+                                <span class="result-label">强度恢复率(%)</span>
+                                <span class="result-value" id="strength-recovery">-</span>
+                            </div>
+                        </div>
+                        <div class="chart-card large">
+                            <h3>载荷-位移曲线</h3>
+                            <canvas id="load-displacement-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>恢复等级说明</h3>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:1rem;">
+                                <div class="result-card" style="padding:0.75rem;">
+                                    <span class="result-label" style="color:#48bb78;">EXCELLENT (≥90%)</span>
+                                    <span class="result-value" style="font-size:0.85rem;color:#e6e6e6;">强度几乎完全恢复</span>
+                                </div>
+                                <div class="result-card" style="padding:0.75rem;">
+                                    <span class="result-label" style="color:#4fd1c5;">GOOD (70%-89%)</span>
+                                    <span class="result-value" style="font-size:0.85rem;color:#e6e6e6;">强度恢复良好</span>
+                                </div>
+                                <div class="result-card" style="padding:0.75rem;">
+                                    <span class="result-label" style="color:#ecc94b;">FAIR (50%-69%)</span>
+                                    <span class="result-value" style="font-size:0.85rem;color:#e6e6e6;">强度部分恢复</span>
+                                </div>
+                                <div class="result-card" style="padding:0.75rem;">
+                                    <span class="result-label" style="color:#ed8936;">POOR (30%-49%)</span>
+                                    <span class="result-value" style="font-size:0.85rem;color:#e6e6e6;">强度恢复有限</span>
+                                </div>
+                                <div class="result-card risk-high" style="padding:0.75rem;grid-column:span 2;">
+                                    <span class="result-label" style="color:#ef4444;">CRITICAL (<30%)</span>
+                                    <span class="result-value" style="font-size:0.85rem;color:#e6e6e6;">强度恢复严重不足，需重新评估修复方案</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="virtual-repair-tab" class="tab-pane">
+                    <div class="virtual-repair-container">
+                        <div class="section-header">
+                            <h2>虚拟涂抹修复</h2>
+                        </div>
+                        <div class="prediction-controls">
+                            <button class="btn-primary" id="enable-paint">启用涂抹工具</button>
+                            <button class="btn-danger" id="disable-paint">禁用涂抹工具</button>
+                            <div class="control-group">
+                                <label>修复半径(mm):</label>
+                                <input type="range" id="repair-radius" min="1" max="20" value="5">
+                                <span id="repair-radius-value">5</span>
+                            </div>
+                            <button class="btn-secondary" id="clear-repair">清除修复</button>
+                        </div>
+                        <div class="result-cards">
+                            <div class="result-card durability" style="grid-column:span 3;">
+                                <span class="result-label">整体修复进度</span>
+                                <div style="margin-top:0.75rem;">
+                                    <div style="background:rgba(26,32,44,0.8);border-radius:10px;height:20px;overflow:hidden;">
+                                        <div id="repair-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#48bb78,#4fd1c5);border-radius:10px;transition:width 0.3s ease;"></div>
+                                    </div>
+                                    <span class="result-value" id="repair-progress-text" style="font-size:1rem;margin-top:0.5rem;">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>已修复裂纹列表</h3>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>裂纹编号</th>
+                                        <th>修复前深度(μm)</th>
+                                        <th>修复后深度(μm)</th>
+                                        <th>修复时间</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="repaired-cracks-body">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="section-header" style="margin-top:1.5rem;">
+                            <div></div>
+                            <button class="btn-primary" id="save-repair-record">保存修复记录</button>
+                        </div>
+                        <div class="info-panel" style="position:static;margin-top:1.5rem;">
+                            <h3>操作说明</h3>
+                            <p style="font-size:0.85rem;color:#a0aec0;margin-top:0.5rem;">请切换到"三维视图"标签查看瓷器，点击"启用涂抹工具"后在瓷器表面拖动鼠标进行涂抹修复。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="realtime-panel">
+        <div class="panel-header">
+            <h3>实时数据</h3>
+            <div class="connection-status">
+                <span class="status-dot" id="ws-status"></span>
+                <span id="ws-status-text">未连接</span>
+            </div>
+        </div>
+        <div class="panel-content" id="realtime-data">
+            <p class="no-data">等待传感器数据...</p>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="js/api-client.js"></script>
+    <script src="js/websocket-client.js"></script>
+    <script src="js/PorcelainModel.js"></script>
+    <script src="js/CrackGradient.js"></script>
+    <script src="js/crack_lines.js"></script>
+    <script src="js/stress-heatmap.js"></script>
+    <script src="js/virtual-repair-tool.js"></script>
+    <script src="js/porcelain-viewer.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
